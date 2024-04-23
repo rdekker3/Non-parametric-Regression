@@ -1,0 +1,56 @@
+---
+title: "Non-parametric Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+These are phonetic data from 80 Southern speakers and track a feature of a "Southern accent", the PIN-PEN merger (as quantified by Pillai score between the PIN and PEN vowels in a scatter plot). The PIN-PEN Pillai scores are first tested for normality so they could be eligible for parametric regression. However, a histogram of all speakers plotted with a theoretical curve of normality shows a non-normal distribution. This is confirmed using the Shapiro-Wilk test. 
+
+Instead, these data use the non-parametric regression technique of bootstrapping as a resampling technique to gauge the impact of the independent variables (age, gender, job title, ethnicity, etc.) The boostrap model is run 2000 times to get an adequate enough sample size to count for the modest sample size here (80). For an independent variable to reach a 95% confidence level, the range of the coefficent cannot contain zero, as then it would have modeled that an independent variable would have no effect. The only variables to reach this level of statistical significance were those who had roots in the South (attended a Southern college), were African American, and were male. This method was able to give value added information for which factors predict this feature of a "Southern accent".  
+
+```
+```
+library(readxl)
+library("rms", lib.loc="/Library/Frameworks/R.framework/Versions/3.5/Resources/library")
+all <- read_excel("Desktop/diss/working/data/everyone.xlsx") 
+
+hist(all$PillaiScore, col = 'skyblue3', xlab= "Pillai score", breaks = 14,
+     main="PIN-PEN Pillai Histogram for all 80 speakers")
+x <- all$PillaiScore
+h<-hist(x, breaks=14, col="skyblue3", xlab="Pillai score",
+        main="PIN-PEN Pillai Histogram with Normal Curve")
+xfit<-seq(min(x),max(x),length=40)
+yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
+yfit <- yfit*diff(h$mids[1:2])*length(x)
+lines(xfit, yfit, col="red", lwd=2) #fit a guassian curve to the dataset in the histogram
+shapiro.test(all$PillaiScore) #shapiro test confirms the visualization of a non-normal distribution
+
+hist(log10(all$PillaiScore), col = 'skyblue3', xlab= "Log Transformed Pillai score", breaks = 16) #log transformed data also shows a long skew and thus a non-normal distribution 
+
+#bootsrap to resample the data and test whether the independent variables are still significant 
+library(boot)#use the boot library for a technique of non-parametric regression 
+
+rsq <- function(formula, data, indices) {
+  d <- data[indices,] # allows boot to select sample
+  fit <- lm(formula, data=d)
+  return(summary(fit)$r.square)
+}
+
+bootcoef <- function(formula, data, indices) {
+  d <- data[indices,] 
+  fit <- lm(formula, data=d)
+  return(coef(fit))
+}
+PP.bootcoef<- boot(formula = PillaiScore ~ SouthernCollege + Ethnicity + Gender,  data=all, statistic =bootcoef, R =2000) #test a model using three strong indepenent predictors 
+
+#after each index, give the 95% confidence interval vallues, where the median serves as a value that can be modeled to give the impact of the independent variable 
+boot.ci(PP.bootcoef, type = "bca", index = 1) #Intercept: (0.178,  0.274) 
+boot.ci(PP.bootcoef, type = "bca", index = 2) #Rooted in the South: (0.1590,  0.3331)
+boot.ci(PP.bootcoef, type = "bca", index = 3) #Ethnicity: (-0.2678, -0.0919)
+boot.ci(PP.bootcoef, type = "bca", index = 4) #Gender: (0.0119,  0.1635)
+#none of the above coefficients contain 0 in their 95% CI, so each are statisticaly significant 
